@@ -13,7 +13,7 @@ from keep_alive import keep_alive
 init(autoreset=True)
 
 status = "idle"  # online/dnd/idle
-custom_status = "https://izaa.k.vu"
+custom_status = ""
 
 usertoken = os.getenv("TOKEN")
 if not usertoken:
