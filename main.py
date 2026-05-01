@@ -5,13 +5,15 @@ import asyncio
 import platform
 import requests
 import websockets
+import time
 from datetime import datetime
 from colorama import init, Fore
 from keep_alive import keep_alive
+from webhook import log_startup, log_heartbeat, send_health
 
 init(autoreset=True)
 
-status = "dnd"
+status = "idle"
 custom_status = ""
 
 usertoken = os.getenv("TOKEN")
@@ -32,6 +34,21 @@ userinfo = validate.json()
 username = userinfo["username"]
 userid = userinfo["id"]
 
+state = {
+    "start_time": time.time(),
+    "reconnects": 0,
+    "last_heartbeat": None,
+    "connected": False,
+    "status": status,
+    "custom_status": custom_status,
+    "secs_to_next_pulse": 0,
+}
+
+async def health_loop():
+    while True:
+        send_health(state)
+        await asyncio.sleep(30)
+
 async def onliner(token, status):
     async with websockets.connect(
         "wss://gateway.discord.gg/?v=9&encoding=json",
@@ -40,6 +57,7 @@ async def onliner(token, status):
         ping_timeout=None
     ) as ws:
         print(f"{Fore.WHITE}[{get_time()}] {Fore.YELLOW}[CONNECTING] {Fore.WHITE}Establishing Gateway connection...")
+
         hello = json.loads(await ws.recv())
         heartbeat_interval = hello["d"]["heartbeat_interval"]
         print(f"{Fore.WHITE}[{get_time()}] {Fore.GREEN}[SUCCESS] {Fore.WHITE}Handshake complete. Interval: {heartbeat_interval}ms")
@@ -66,14 +84,26 @@ async def onliner(token, status):
         await ws.send(json.dumps(cstatus))
         print(f"{Fore.WHITE}[{get_time()}] {Fore.CYAN}[SUCCESS] {Fore.WHITE}Presence set to: {custom_status}")
 
+        state["connected"] = True
+        log_startup(username, userid, heartbeat_interval, status, custom_status)
+
         while True:
-            await asyncio.sleep(heartbeat_interval / 1000)
+            sleep_secs = heartbeat_interval / 1000
+            for i in range(int(sleep_secs), 0, -1):
+                state["secs_to_next_pulse"] = i
+                await asyncio.sleep(1)
+
             print(f"{Fore.WHITE}[{get_time()}] {Fore.MAGENTA}[HEARTBEAT] {Fore.WHITE}Sending keep-alive pulse...")
             try:
                 await ws.send(json.dumps({"op": 1, "d": None}))
+                state["last_heartbeat"] = time.time()
+                state["secs_to_next_pulse"] = int(sleep_secs)
                 print(f"{Fore.WHITE}[{get_time()}] {Fore.GREEN}[SUCCESS] {Fore.WHITE}Pulse sent.")
+                log_heartbeat(True)
             except Exception as e:
+                state["connected"] = False
                 print(f"{Fore.RED}[FAILURE] Pulse failed: {e}")
+                log_heartbeat(False, str(e))
                 break
 
 async def run_onliner():
@@ -82,10 +112,14 @@ async def run_onliner():
     print(f"{Fore.CYAN}[SCRIPT STARTED] copyright 2026 @uh.izaak")
     print(f"{Fore.GREEN}[INFO] Authenticated as: {username} ({userid})")
 
+    asyncio.ensure_future(health_loop())
+
     while True:
         try:
             await onliner(usertoken, status)
         except Exception as e:
+            state["connected"] = False
+            state["reconnects"] += 1
             print(f"{Fore.WHITE}[{get_time()}] {Fore.RED}[RETRYING] {Fore.WHITE}Connection dropped. Reconnecting in 5s...")
             await asyncio.sleep(5)
 
