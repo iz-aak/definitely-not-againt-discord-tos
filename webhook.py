@@ -1,7 +1,7 @@
 import requests
 import time
 from datetime import datetime
-from webhook_config import WEBHOOK_URL, FLASK_URL
+from webhook_config import HEALTH_WEBHOOK_URL, LOG_WEBHOOK_URL, FLASK_URL
 
 _health_message_id = None
 _health_webhook_id = None
@@ -15,7 +15,7 @@ def _parse_webhook(url):
     return parts[-2], parts[-1]
 
 def send_log(lines: list[str], title: str, color: int):
-    if not WEBHOOK_URL:
+    if not LOG_WEBHOOK_URL:
         return
     body = "\n".join(lines)
     payload = {
@@ -26,7 +26,7 @@ def send_log(lines: list[str], title: str, color: int):
         }]
     }
     try:
-        requests.post(WEBHOOK_URL, json=payload, timeout=5)
+        requests.post(LOG_WEBHOOK_URL, json=payload, timeout=5)
     except Exception:
         pass
 
@@ -56,11 +56,11 @@ def log_heartbeat(success: bool, error: str = ""):
 def send_health(state: dict):
     global _health_message_id, _health_webhook_id, _health_webhook_token
 
-    if not WEBHOOK_URL:
+    if not HEALTH_WEBHOOK_URL:
         return
 
     if _health_webhook_id is None:
-        _health_webhook_id, _health_webhook_token = _parse_webhook(WEBHOOK_URL)
+        _health_webhook_id, _health_webhook_token = _parse_webhook(HEALTH_WEBHOOK_URL)
 
     uptime_secs = int(time.time() - state["start_time"])
     hours, rem = divmod(uptime_secs, 3600)
@@ -80,19 +80,12 @@ def send_health(state: dict):
 
     description = "\n".join([
         f"Currently: Waiting `{secs_to_next}` secs to send next pulse",
-        "---",
         f"Presence `{state.get('status', 'idle')}`",
-        "---",
         f"Status `{state.get('custom_status') or 'empty'}`",
-        "---",
         f"Uptime `{uptime_str}`",
-        "---",
         f"Reconnects `{state.get('reconnects', 0)}`",
-        "---",
         f"Last Heartbeat {last_hb_str}",
-        "---",
         f"Flask `{FLASK_URL}`",
-        "---",
         f"-# Last updated: {get_time()}",
     ])
 
@@ -109,7 +102,7 @@ def send_health(state: dict):
             url = f"https://discord.com/api/webhooks/{_health_webhook_id}/{_health_webhook_token}/messages/{_health_message_id}"
             requests.patch(url, json=payload, timeout=5)
         else:
-            r = requests.post(f"{WEBHOOK_URL}?wait=true", json=payload, timeout=5)
+            r = requests.post(f"{HEALTH_WEBHOOK_URL}?wait=true", json=payload, timeout=5)
             if r.status_code == 200:
                 _health_message_id = r.json()["id"]
     except Exception:
