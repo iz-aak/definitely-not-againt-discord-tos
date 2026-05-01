@@ -11,7 +11,7 @@ from keep_alive import keep_alive
 
 init(autoreset=True)
 
-status = "idle"
+status = "dnd"
 custom_status = ""
 
 usertoken = os.getenv("TOKEN")
