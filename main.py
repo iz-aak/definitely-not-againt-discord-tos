@@ -1,4 +1,3 @@
-cat > main.py << 'EOF'
 import os
 import sys
 import json
@@ -93,4 +92,3 @@ async def run_onliner():
 if __name__ == "__main__":
     keep_alive()
     asyncio.run(run_onliner())
-EOF
