@@ -1,3 +1,4 @@
+cat > main.py << 'EOF'
 import os
 import sys
 import json
@@ -36,11 +37,10 @@ async def onliner(token, status):
     async with websockets.connect(
         "wss://gateway.discord.gg/?v=9&encoding=json",
         max_size=10_000_000,
-        ping_interval=20,
-        ping_timeout=20
+        ping_interval=None,
+        ping_timeout=None
     ) as ws:
         print(f"{Fore.WHITE}[{get_time()}] {Fore.YELLOW}[CONNECTING] {Fore.WHITE}Establishing Gateway connection...")
-
         hello = json.loads(await ws.recv())
         heartbeat_interval = hello["d"]["heartbeat_interval"]
         print(f"{Fore.WHITE}[{get_time()}] {Fore.GREEN}[SUCCESS] {Fore.WHITE}Handshake complete. Interval: {heartbeat_interval}ms")
@@ -93,3 +93,4 @@ async def run_onliner():
 if __name__ == "__main__":
     keep_alive()
     asyncio.run(run_onliner())
+EOF
