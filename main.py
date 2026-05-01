@@ -20,18 +20,24 @@ if not usertoken:
 
 headers = {"Authorization": usertoken, "Content-Type": "application/json"}
 
-validate = requests.get("https://canary.discordapp.com/api/v9/users/@me", headers=headers)
+# Using standard API endpoint for better stability
+validate = requests.get("https://discord.com/api/v9/users/@me", headers=headers)
 if validate.status_code != 200:
     print(f"{Fore.WHITE}[{Fore.RED}-{Fore.WHITE}] Your token might be invalid. Please check it again.")
     sys.exit()
 
-userinfo = requests.get("https://canary.discordapp.com/api/v9/users/@me", headers=headers).json()
+userinfo = validate.json()
 username = userinfo["username"]
-discriminator = userinfo["discriminator"]
+# Discriminator is deprecated in 2026, but kept for script compatibility
+discriminator = userinfo.get("discriminator", "0000")
 userid = userinfo["id"]
 
 async def onliner(token, status):
-    async with websockets.connect("wss://gateway.discord.gg/?v=9&encoding=json") as ws:
+    # Added max_size to handle large initial payloads from Discord
+    async with websockets.connect(
+        "wss://gateway.discord.gg/?v=9&encoding=json", 
+        max_size=10_000_000
+    ) as ws:
         start = json.loads(await ws.recv())
         heartbeat = start["d"]["heartbeat_interval"]
 
@@ -59,21 +65,18 @@ async def onliner(token, status):
                         "state": custom_status,
                         "name": "Custom Status",
                         "id": "custom",
-                                #Uncomment the below lines if you want an emoji in the status
-                                #"emoji": {
-                                    #"name": "emoji name",
-                                    #"id": "emoji id",
-                                    #"animated": False,
-                                #},
-                            }
-                        ],
+                    }
+                ],
                 "status": status,
                 "afk": False,
             },
         }
         await ws.send(json.dumps(cstatus))
 
-        online = {"op": 1, "d": "None"}
+        # Fixed heartbeat payload: Must be None (null), not "None" (string)
+        online = {"op": 1, "d": None}
+        
+        # Keep the connection alive for one heartbeat cycle
         await asyncio.sleep(heartbeat / 1000)
         await ws.send(json.dumps(online))
 
@@ -82,10 +85,18 @@ async def run_onliner():
         os.system("cls")
     else:
         os.system("clear")
-    print(f"{Fore.WHITE}[{Fore.LIGHTGREEN_EX}+{Fore.WHITE}] Logged in as {Fore.LIGHTBLUE_EX}{username} {Fore.WHITE}({userid})!")
+    
+    print(f"{Fore.WHITE}[{Fore.LIGHTGREEN_EX}+{Fore.WHITE}] Logged in as {Fore.LIGHTBLUE_EX}{username}#{discriminator} {Fore.WHITE}({userid})!")
+    
     while True:
-        await onliner(usertoken, status)
-        await asyncio.sleep(50)
+        try:
+            await onliner(usertoken, status)
+        except Exception as e:
+            print(f"{Fore.RED}[-]{Fore.WHITE} Connection error: {e}. Reconnecting...")
+        
+        # Sleep before restarting the connection cycle
+        await asyncio.sleep(30)
 
-keep_alive()
-asyncio.run(run_onliner())
+if __name__ == "__main__":
+    keep_alive()
+    asyncio.run(run_onliner())
