@@ -46,7 +46,10 @@ state = {
 
 async def health_loop():
     while True:
-        send_health(state)
+        try:
+            send_health(state)
+        except Exception as e:
+            print(f"{Fore.RED}[{get_time()}] [HEALTH] Embed update failed: {e}")
         await asyncio.sleep(30)
 
 async def onliner(token, status):
@@ -85,7 +88,10 @@ async def onliner(token, status):
         print(f"{Fore.WHITE}[{get_time()}] {Fore.CYAN}[SUCCESS] {Fore.WHITE}Presence set to: {custom_status}")
 
         state["connected"] = True
-        log_startup(username, userid, heartbeat_interval, status, custom_status)
+        try:
+            log_startup(username, userid, heartbeat_interval, status, custom_status)
+        except Exception as e:
+            print(f"{Fore.RED}[{get_time()}] [LOG] Startup log failed: {e}")
 
         while True:
             sleep_secs = heartbeat_interval / 1000
@@ -99,11 +105,17 @@ async def onliner(token, status):
                 state["last_heartbeat"] = time.time()
                 state["secs_to_next_pulse"] = int(sleep_secs)
                 print(f"{Fore.WHITE}[{get_time()}] {Fore.GREEN}[SUCCESS] {Fore.WHITE}Pulse sent.")
-                log_heartbeat(True)
+                try:
+                    log_heartbeat(True)
+                except Exception as e:
+                    print(f"{Fore.RED}[{get_time()}] [LOG] Heartbeat log failed: {e}")
             except Exception as e:
                 state["connected"] = False
                 print(f"{Fore.RED}[FAILURE] Pulse failed: {e}")
-                log_heartbeat(False, str(e))
+                try:
+                    log_heartbeat(False, str(e))
+                except Exception as le:
+                    print(f"{Fore.RED}[{get_time()}] [LOG] Failure log failed: {le}")
                 break
 
 async def run_onliner():
@@ -120,7 +132,11 @@ async def run_onliner():
         except Exception as e:
             state["connected"] = False
             state["reconnects"] += 1
-            print(f"{Fore.WHITE}[{get_time()}] {Fore.RED}[RETRYING] {Fore.WHITE}Connection dropped. Reconnecting in 5s...")
+            print(f"{Fore.WHITE}[{get_time()}] {Fore.RED}[RETRYING] {Fore.WHITE}Connection dropped ({e}). Reconnecting in 5s...")
+            try:
+                log_heartbeat(False, str(e))
+            except Exception:
+                pass
             await asyncio.sleep(5)
 
 if __name__ == "__main__":
